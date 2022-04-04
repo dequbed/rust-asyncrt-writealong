@@ -1,6 +1,6 @@
-// Our only dependencies are the Rust stdlib; you can compile and run this code just by calling
-// `$ rust block1.rs` and then run the resulting executable named `block1`. The Makefile in this
-// directory does just that for you.
+// Our only dependencies are the Rust stdlib; you can compile and run this code
+// just by calling `$ rust block1.rs` and then run the resulting executable
+// named `block1`. The Makefile in this directory does just that for you.
 
 use std::future::Future;
 use std::pin::Pin;
@@ -10,12 +10,12 @@ use std::task::{Context, Waker, Poll};
 #[derive(Debug)]
 /// The shared contact point between tx and rx.
 /// 
-/// Both the TX and RX have a reference to an instance of this and "sending" a value is simply
-/// putting the value inside the slot.
-struct Shared<T> {
+/// Both the TX and RX have a reference to an instance of this and "sending" a
+/// value is simply putting the value inside the slot.
+pub struct Shared<T> {
     /// Storage for a value that has be sent and not yet received
     pub slot: Option<T>,
-    /// The mystical Waker, the part making everything smartly async (◕▿◕✿)
+    /// The mythical Waker, the part making everything smartly async (◕▿◕✿)
     pub waker: Option<Waker>,
 }
 impl<T> Shared<T> {
@@ -31,8 +31,9 @@ impl<T> Shared<T> {
 /// Transmitting end
 ///
 /// For simplicity this is a very simple and entirely syncronous implementation.
-/// A Weak pointer is used so that shared is deallocated as soon as the RX is dropped.
-struct TX<T> {
+/// A Weak pointer is used so that shared is deallocated as soon as the RX is
+/// dropped.
+pub struct TX<T> {
     shared: Weak<Mutex<Shared<T>>>,
 }
 impl<T> TX<T> {
@@ -56,8 +57,9 @@ impl<T> TX<T> {
 
             Ok(())
         } else {
-            // This case is hit when the corresponding receiving end has been dropped. To not make
-            // things complicated we don't return a specific type for this kind of error.
+            // This case is hit when the corresponding receiving end has been
+            // dropped. To not make things complicated we don't return a
+            // specific type for this kind of error.
             Err(value)
         }
     }
@@ -69,45 +71,49 @@ impl<T> TX<T> {
 }
 
 #[derive(Debug)]
-struct RX<T> {
+pub struct RX<T> {
     shared: Arc<Mutex<Shared<T>>>,
 }
 impl<T> RX<T> {
     pub fn new(shared: Arc<Mutex<Shared<T>>>) -> Self {
         Self { shared }
     }
-
-    /// Extract the internal value, if there is one.
-    ///
-    /// If there is no value currently, **schedule the current task to be woken up** when one is sent.
-    pub fn poll_get(&self, waker: &Waker) -> Option<T> {
-        let mut guard = self.shared.lock().unwrap();
-
-        if let Some(ref oldwaker) = guard.waker {
-            if !waker.will_wake(oldwaker) {
-                guard.waker.replace(waker.clone());
-            }
-        } else {
-            guard.waker = Some(waker.clone());
-        }
-
-        guard.slot.take()
-    }
 }
 
 impl<T> Future for RX<T> {
     type Output = T;
 
+    /// Extract the internal value, if there is one.
+    ///
+    /// If there is no value currently, **schedules the current task to be woken
+    /// up** when one is sent.
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        if let Some(val) = self.poll_get(cx.waker()) {
-            return Poll::Ready(val);
+        let mut guard = self.shared.lock().unwrap();
+
+        if let Some(value) = guard.slot.take() {
+            // Happy path, there was something sent. We just return that and are
+            // happy.
+            return Poll::Ready(value);
         } else {
+            let waker = cx.waker();
+
+            // There was nothing sent yet. We need to install a waker, ensuring
+            // that this task will be polled again when a value was sent, since
+            // `TX::try_send` will call waker.wake().
+            if let Some(ref oldwaker) = guard.waker {
+                if !waker.will_wake(oldwaker) {
+                    guard.waker.replace(waker.clone());
+                }
+            } else {
+                guard.waker = Some(waker.clone());
+            }
+
             return Poll::Pending;
         }
     }
 }
 
-fn channel<T>() -> (TX<T>, RX<T>) {
+pub fn channel<T>() -> (TX<T>, RX<T>) {
     let shared = Arc::new(Mutex::new(Shared::new()));
     let tx = TX::new(Arc::downgrade(&shared));
     let rx = RX::new(shared);
