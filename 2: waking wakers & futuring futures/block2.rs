@@ -95,7 +95,7 @@ impl OurWaker {
     }
 
     /// Scheduling the future by just spawning it like a new one. it works.
-    pub fn reshedule(&self) {
+    pub fn reschedule(&self) {
         let mut guard = self.slot.lock().unwrap();
         if let Some(fut) = guard.take() {
             self.spawn.send(fut);
@@ -128,7 +128,7 @@ impl OurWaker {
 
     pub unsafe fn wake(ptr: *const ()) {
         let this = Self::from_raw_waker(ptr);
-        this.reshedule()
+        this.reschedule()
     }
 
     pub unsafe fn wake_by_ref(ptr: *const ()) {
