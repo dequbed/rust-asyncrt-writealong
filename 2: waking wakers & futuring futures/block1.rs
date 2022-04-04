@@ -1,5 +1,6 @@
 // Our only dependencies are the Rust stdlib; you can compile and run this code just by calling
-// `$ rust block1.rs` and then run the resulting executable named `block1`
+// `$ rust block1.rs` and then run the resulting executable named `block1`. The Makefile in this
+// directory does just that for you.
 
 use std::future::Future;
 use std::pin::Pin;
@@ -30,6 +31,7 @@ impl<T> Shared<T> {
 /// Transmitting end
 ///
 /// For simplicity this is a very simple and entirely syncronous implementation.
+/// A Weak pointer is used so that shared is deallocated as soon as the RX is dropped.
 struct TX<T> {
     shared: Weak<Mutex<Shared<T>>>,
 }
@@ -48,8 +50,8 @@ impl<T> TX<T> {
             }
 
             guard.slot = Some(value);
-            if let Some(ref waker) = guard.waker {
-                waker.wake_by_ref()
+            if let Some(waker) = guard.waker.take() {
+                waker.wake()
             }
 
             Ok(())
