@@ -1,1 +1,2 @@
-/block1
+/block*
+!/block*.rs
